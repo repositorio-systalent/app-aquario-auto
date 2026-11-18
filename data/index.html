@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automação Aquário</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav>
+    <button onclick="trocarTela('dashboard')">Dashboard</button>
+    <button onclick="trocarTela('config')">Configurações</button>
+    <button onclick="trocarTela('logs')">Logs</button>
+    <button onclick="trocarTela('sistema')">Sistema</button>
+  </nav>
+
+  <div class="container">
+    <!-- TELA 1: DASHBOARD -->
+    <div id="tela-dashboard">
+      <div id="card-tpa-ativa" class="card alert-tpa hidden">
+        <h3>⚠️ TPA em Andamento</h3>
+        <p><strong>Etapa Atual:</strong> <span id="tpa_estado">--</span></p>
+        <button class="btn btn-danger" style="width:100%; margin-top:8px;" onclick="interromperTPA()">
+          🛑 Interromper TPA Agora
+        </button>
+      </div>
+      <div class="card">
+        <h2>Monitoramento</h2>
+        <p><strong>Temperatura da Água:</strong> <span id="temp">--</span> °C</p>
+        <p><strong>Climatização:</strong> <span id="status_termico">Estável (Desligado)</span></p>
+        <p><strong>Data/Hora RTC:</strong> <span id="data_hora">--</span></p>
+      </div>
+
+      <div class="card grid">
+        <div>
+          <h3>Aquário (12L)</h3>
+          <p>Volume: <strong id="vol_aq">--</strong> L</p>
+          <p>Distância: <span id="dist_aq">--</span> mm</p>
+        </div>
+        <div>
+          <h3>Reservatório</h3>
+          <p>Volume: <strong id="vol_res">--</strong> L (<span id="perc_res">--</span>%)</p>
+          <p id="alerta_critico" class="critico hidden">⚠️ Nível crítico do reservatório</p>
+          <p>Distância: <span id="dist_res">--</span> mm</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Histórico e Próxima TPA</h3>
+        <p><strong>Última Realizada:</strong> <span id="ult_tpa">--</span> (<span id="vol_ult_tpa">--</span> L)</p>
+        <p><strong>Próxima Agendada:</strong> <span id="prox_tpa">--</span></p>
+        <button id="btn-executar-tpa" class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="executarTPAAgora()">
+          ▶️ Executar TPA Agora
+        </button>
+      </div>
+
+      <div class="card">
+        <h3>Diagnóstico</h3>
+        <p>Reinicializações Registradas: <span id="boots">--</span></p>
+        <button class="btn btn-danger" onclick="resetBoots()">Zerar Contador</button>
+      </div>
+    </div>
+
+    <!-- TELA 2: CONFIGURAÇÕES (TPA E TEMPERATURA EM BOXES INDEPENDENTES) -->
+    <div id="tela-config" class="hidden">
+
+      <!-- BOX 1: CONFIGURAÇÃO DA TPA -->
+      <section class="config-box">
+        <div class="box-header">
+          <h2>💧 Configuração da TPA</h2>
+          <span class="badge-box">Hidráulica e Agendamento</span>
+        </div>
+
+        <div class="box-body">
+          <h3>Agendamento de TPA</h3>
+          <label><strong>Periodicidade:</strong></label>
+          <div class="radio-group">
+            <label><input type="radio" name="periodicidade" value="1" id="rad_1x"> 1 vez ao dia</label>
+            <label><input type="radio" name="periodicidade" value="2" id="rad_2x"> 2 vezes ao dia</label>
+          </div>
+          
+          <label>Hora Primeira TPA:</label>
+          <input type="time" id="cfg_hora1">
+          
+          <div id="box_hora2">
+            <label>Hora Segunda TPA:</label>
+            <input type="time" id="cfg_hora2">
+          </div>
+
+          <hr class="divider">
+
+          <h3>Limites Físicos (mm) e Volumes</h3>
+          <div class="info-box">
+            <p>📡 <strong>Leitura Atual dos Sensores:</strong></p>
+            <p>Boia Aquário: <strong id="live_dist_aq">--</strong> mm | Boia Reservatório: <strong id="live_dist_res">--</strong> mm</p>
+          </div>
+
+          <label>Aquário Cheio (Máx mm):</label>
+          <input type="number" id="cfg_aq_max">
+          <label>Aquário Nível Mínimo Seguro (Dreno mm):</label>
+          <input type="number" id="cfg_aq_min">
+          <label>Reservatório Cheio (Máx mm):</label>
+          <input type="number" id="cfg_res_max">
+          <label>Reservatório Vazio (Mín mm):</label>
+          <input type="number" id="cfg_res_min">
+          <label>Volume Total do Reservatório (L):</label>
+          <input type="number" step="0.5" id="cfg_res_vol">
+          <label>Percentual Mínimo Crítico (%):</label>
+          <input type="number" id="cfg_res_critico">
+          <label>Tempo Máximo de Segurança - Drenagem (segundos):</label>
+          <input type="number" id="cfg_tempo_dreno">
+          <label>Tempo Máximo de Segurança - Enchimento (segundos):</label>
+          <input type="number" id="cfg_tempo_enche">
+          <label>Pausa Pós-Drenagem / Sifão (segundos):</label>
+          <input type="number" id="cfg_pausa_dreno">
+          <label>Tempo de Estabilização Pós-Enchimento (segundos):</label>
+          <input type="number" id="cfg_estab_seg">
+          <label>Tolerância de Estabilização (mm):</label>
+          <input type="number" id="cfg_estab_tol">
+
+          <hr class="divider">
+
+          <h3>Calibração Manual com Cronômetro</h3>
+          <div class="grid">
+            <div>
+              <p>Bomba Drenagem: <strong id="timer_dreno">0</strong> s</p>
+              <button class="btn btn-primary" style="width:100%;" onclick="toggleBomba('dreno')">Ligar/Desligar Drenagem</button>
+            </div>
+            <div>
+              <p>Bomba Enchimento: <strong id="timer_enche">0</strong> s</p>
+              <button class="btn btn-primary" style="width:100%;" onclick="toggleBomba('enche')">Ligar/Desligar Enchimento</button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-save-box" onclick="salvarConfigTPA()">
+            💾 Salvar Configurações da TPA
+          </button>
+        </div>
+      </section>
+
+      <!-- BOX 2: CONFIGURAÇÃO DA TEMPERATURA -->
+      <section class="config-box config-box-temp">
+        <div class="box-header box-header-temp">
+          <h2>🌡️ Configuração da Temperatura</h2>
+          <span class="badge-box">Aquecimento e Cooler</span>
+        </div>
+
+        <div class="box-body">
+          <div class="info-box">
+            <p>🌡️ <strong>Temperatura Atual Lida:</strong> <strong id="live_temp_cfg">--</strong> °C</p>
+          </div>
+
+          <label style="display:flex; align-items:center; gap:8px; margin-bottom:14px; cursor:pointer;">
+            <input type="checkbox" id="cfg_temp_ativo" style="width:18px; height:18px;">
+            <strong>Ativar Controle Automático de Temperatura</strong>
+          </label>
+
+          <div class="grid">
+            <div>
+              <label>🔥 Ligar Aquecedor abaixo de (°C):</label>
+              <input type="number" step="0.1" id="cfg_temp_min_liga">
+            </div>
+            <div>
+              <label>🔥 Desligar Aquecedor ao atingir (°C):</label>
+              <input type="number" step="0.1" id="cfg_temp_min_desliga">
+            </div>
+          </div>
+
+          <div class="grid">
+            <div>
+              <label>❄️ Ligar Cooler acima de (°C):</label>
+              <input type="number" step="0.1" id="cfg_temp_max_liga">
+            </div>
+            <div>
+              <label>❄️ Desligar Cooler ao baixar para (°C):</label>
+              <input type="number" step="0.1" id="cfg_temp_max_desliga">
+            </div>
+          </div>
+
+          <button class="btn btn-temp btn-save-box" onclick="salvarConfigTemp()">
+            💾 Salvar Configurações de Temperatura
+          </button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- TELA 3: LOGS E ERROS -->
+    <div id="tela-logs" class="hidden">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Histórico de TPAs</h2>
+          <div>
+            <button class="btn btn-primary" onclick="carregarLogs()">Atualizar</button>
+            <button class="btn btn-danger" onclick="limparLog('tpa')">Limpar</button>
+          </div>
+        </div>
+        <pre id="box-log-tpa" class="log-box">Carregando...</pre>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Log de Erros e Alertas</h2>
+          <button class="btn btn-danger" onclick="limparLog('erro')">Limpar</button>
+        </div>
+        <pre id="box-log-erro" class="log-box">Carregando...</pre>
+      </div>
+    </div>
+
+    <!-- TELA 4: REDE E SISTEMA -->
+    <div id="tela-sistema" class="hidden">
+      <div class="card">
+        <h2>Rede Wi-Fi</h2>
+        <label>Nome da Rede (SSID):</label>
+        <div class="input-row">
+          <input type="text" id="wifi_ssid">
+          <button class="btn btn-primary" type="button" onclick="abrirModalWifi()">Buscar Rede</button>
+        </div>
+        <label>Senha (deixe em branco para manter a atual):</label>
+        <input type="password" id="wifi_pass" placeholder="••••••••">
+        <button class="btn btn-primary" onclick="salvarConfigWiFi()">Atualizar Wi-Fi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL SCANNER DE REDES WI-FI -->
+  <div id="modal-wifi" class="modal hidden">
+    <div class="modal-content">
+      <h3>Redes Wi-Fi Disponíveis</h3>
+      <p id="scan-status">Buscando redes próximas...</p>
+      <ul id="lista-redes" class="wifi-list"></ul>
+      <button class="btn btn-danger" onclick="fecharModalWifi()">Fechar</button>
+    </div>
+  </div>
+  <!-- OVERLAY DE CARREGAMENTO -->
+  <div id="loading-overlay" class="modal hidden">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loading-text">Salvando configurações e reiniciando ESP32...</p>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
