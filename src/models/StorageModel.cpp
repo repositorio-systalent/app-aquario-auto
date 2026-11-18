@@ -26,8 +26,8 @@ bool StorageModel::loadConfig(SystemConfig &config) {
   }
 
   if (!f) {
-    strlcpy(config.wifi_ssid, "BARROS1", sizeof(config.wifi_ssid));
-    strlcpy(config.wifi_pass, "sofia2410", sizeof(config.wifi_pass));
+    strlcpy(config.wifi_ssid, "SEU_WIFI", sizeof(config.wifi_ssid));
+    strlcpy(config.wifi_pass, "SUA_SENHA", sizeof(config.wifi_pass));
     config.tpa_periodicidade = 1;
     strlcpy(config.tpa_hora1, "09:00", sizeof(config.tpa_hora1));
     strlcpy(config.tpa_hora2, "21:00", sizeof(config.tpa_hora2));
@@ -45,17 +45,19 @@ bool StorageModel::loadConfig(SystemConfig &config) {
     config.tempo_pausa_pos_dreno_seg = 5;
     config.tempo_estabilizacao_seg = 3;
     config.tolerancia_estabilizacao_mm = 2;
-    config.boot_counter = 0;
+
     config.temp_controle_ativo = true;
-    config.temp_min_liga = 24.8;
-    config.temp_min_desliga = 25.3;
-    config.temp_max_liga = 26.8;
-    config.temp_max_desliga = 26.2;
+    config.temp_min_liga = 24.8f;
+    config.temp_min_desliga = 25.3f;
+    config.temp_max_liga = 26.8f;
+    config.temp_max_desliga = 26.2f;
+
+    config.boot_counter = 0;
     saveConfig(config);
     return true;
   }
 
-  DynamicJsonDocument doc(1536);
+  DynamicJsonDocument doc(2048);
   DeserializationError err = deserializeJson(doc, f);
   f.close();
 
@@ -80,18 +82,20 @@ bool StorageModel::loadConfig(SystemConfig &config) {
   config.tempo_pausa_pos_dreno_seg = doc["tempo_pausa_pos_dreno_seg"] | 5;
   config.tempo_estabilizacao_seg = doc["tempo_estabilizacao_seg"] | 3;
   config.tolerancia_estabilizacao_mm = doc["tolerancia_estabilizacao_mm"] | 2;
-  config.boot_counter = doc["boot_counter"] | 0;
+
   config.temp_controle_ativo = doc["temp_controle_ativo"] | true;
-  config.temp_min_liga = doc["temp_min_liga"] | 24.8;
-  config.temp_min_desliga = doc["temp_min_desliga"] | 25.3;
-  config.temp_max_liga = doc["temp_max_liga"] | 26.8;
-  config.temp_max_desliga = doc["temp_max_desliga"] | 26.2;
+  config.temp_min_liga = doc["temp_min_liga"] | 24.8f;
+  config.temp_min_desliga = doc["temp_min_desliga"] | 25.3f;
+  config.temp_max_liga = doc["temp_max_liga"] | 26.8f;
+  config.temp_max_desliga = doc["temp_max_desliga"] | 26.2f;
+
+  config.boot_counter = doc["boot_counter"] | 0;
 
   return true;
 }
 
 bool StorageModel::saveConfig(const SystemConfig &config) {
-  DynamicJsonDocument doc(1536);
+  DynamicJsonDocument doc(2048);
   doc["wifi_ssid"] = config.wifi_ssid;
   doc["wifi_pass"] = config.wifi_pass;
   doc["tpa_periodicidade"] = config.tpa_periodicidade;
@@ -108,17 +112,18 @@ bool StorageModel::saveConfig(const SystemConfig &config) {
   doc["res_percent_critico"] = config.res_percent_critico;
   doc["tempo_max_drenagem_seg"] = config.tempo_max_drenagem_seg;
   doc["tempo_max_enchimento_seg"] = config.tempo_max_enchimento_seg;
-  doc["boot_counter"] = config.boot_counter;
   doc["tempo_pausa_pos_dreno_seg"] = config.tempo_pausa_pos_dreno_seg;
   doc["tempo_estabilizacao_seg"] = config.tempo_estabilizacao_seg;
   doc["tolerancia_estabilizacao_mm"] = config.tolerancia_estabilizacao_mm;
+
   doc["temp_controle_ativo"] = config.temp_controle_ativo;
   doc["temp_min_liga"] = config.temp_min_liga;
   doc["temp_min_desliga"] = config.temp_min_desliga;
   doc["temp_max_liga"] = config.temp_max_liga;
   doc["temp_max_desliga"] = config.temp_max_desliga;
 
-  // 1. Grava cópia rápida na Flash interna (LittleFS)
+  doc["boot_counter"] = config.boot_counter;
+
   bool okFlash = false;
   File fFlash = LittleFS.open(CONFIG_FILE, "w");
   if (fFlash) {
@@ -126,7 +131,6 @@ bool StorageModel::saveConfig(const SystemConfig &config) {
     fFlash.close();
   }
 
-  // 2. Grava no Cartão SD se estiver disponível
   bool okSD = false;
   if (sdDisponivel) {
     if (SD.exists(CONFIG_FILE)) SD.remove(CONFIG_FILE);

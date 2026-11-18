@@ -9,6 +9,7 @@
 #include "models/StorageModel.h"
 #include "models/SensorModel.h"
 #include "controllers/TPAController.h"
+#include "controllers/TempController.h"
 #include "controllers/WebController.h"
 
 #define WDT_TIMEOUT_SEG 10

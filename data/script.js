@@ -81,6 +81,11 @@ function carregarConfiguracoes() {
       document.getElementById('cfg_pausa_dreno').value = cfg.tempo_pausa_pos_dreno_seg;
       document.getElementById('cfg_estab_seg').value = cfg.tempo_estabilizacao_seg;
       document.getElementById('cfg_estab_tol').value = cfg.tolerancia_estabilizacao_mm;
+      document.getElementById('cfg_temp_ativo').checked = cfg.temp_controle_ativo;
+      document.getElementById('cfg_temp_min_liga').value = cfg.temp_min_liga;
+      document.getElementById('cfg_temp_min_desliga').value = cfg.temp_min_desliga;
+      document.getElementById('cfg_temp_max_liga').value = cfg.temp_max_liga;
+      document.getElementById('cfg_temp_max_desliga').value = cfg.temp_max_desliga;
     });
 }
 
@@ -181,6 +186,18 @@ function atualizarDashboard() {
     .then(r => r.json())
     .then(data => {
       document.getElementById('temp').innerText = data.temperatura.toFixed(1);
+      
+      const stTermico = document.getElementById('status_termico');
+      if (stTermico) {
+        if (data.aquecedor_ligado) {
+          stTermico.innerText = '🔥 Aquecedor LIGADO';
+        } else if (data.cooler_ligado) {
+          stTermico.innerText = '❄️ Cooler LIGADO';
+        } else {
+          stTermico.innerText = '✅ Estável (Desligado)';
+        }
+      }
+
       document.getElementById('data_hora').innerText = data.data_hora;
       document.getElementById('vol_aq').innerText = data.volume_aquario.toFixed(2);
       document.getElementById('dist_aq').innerText = data.dist_aquario;

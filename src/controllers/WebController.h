@@ -19,7 +19,6 @@ private:
   uint32_t tempoPedidoRestart = 0;
 
   void handleStatus();
-  void handleSaveConfig();
   void handleBomba();
   void handleResetBoot();
   void handleNotFound();
@@ -27,7 +26,6 @@ private:
   void handleSaveConfigTemp();
   void handleSaveConfigWiFi();
   void handleWifiScan();
-  
 
 public:
   WebController(SystemConfig &cfg, SensorModel &sens, TPAController &tpaCtrl, TempController &temp);

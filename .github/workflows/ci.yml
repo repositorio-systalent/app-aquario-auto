@@ -1,0 +1,54 @@
+name: CI - Testes Unitarios e Build ESP32
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit-tests:
+    name: Testes Unitarios (Native C++)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python e PlatformIO
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar PlatformIO
+        run: pip install -U platformio
+
+      - name: Executar testes unitarios (Unity)
+        run: pio test -e native -v
+
+  build-esp32:
+    name: Compilacao Firmware ESP32 e LittleFS
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python e PlatformIO
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache do PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+
+      - name: Instalar PlatformIO
+        run: pip install -U platformio
+
+      - name: Compilar Firmware ESP32
+        run: pio run -e esp32dev
+
+      - name: Empacotar Sistema de Arquivos (LittleFS)
+        run: pio run -e esp32dev -t buildfs
