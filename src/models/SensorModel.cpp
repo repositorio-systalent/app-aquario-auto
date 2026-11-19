@@ -2,11 +2,8 @@
 #include "logic/AquarioLogic.h"
 #include <math.h>
 
-const float R_FIXO = 9800.0;     // Seu resistor fixo medido no multímetro
-const float R0_NTC = 10000.0;    // NTC 10k a 25°C
-const float T0_KELVIN = 298.15;
-const float VCC_MV = 3280.0;     // Tensão real medida no pino 3.3V
-const float BETA = 3950.0;       // Beta 3950
+const float R_FIXO = 9800.0;  // Resistor fixo medido no multímetro
+const float VCC_MV = 3280.0;  // Tensão real medida no pino 3.3V
 
 SensorModel::SensorModel() : rtc(Wire) {}
 

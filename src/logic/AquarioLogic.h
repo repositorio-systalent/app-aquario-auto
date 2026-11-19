@@ -69,12 +69,12 @@ inline float calcularPercentualReservatorio(uint16_t distAtualMm, uint16_t distC
   return (restante / total) * 100.0f;
 }
 
-// Converte resistência do NTC 10k (Beta 3950) para graus Celsius
+// Converte resistência do NTC 100k (Beta 3750) para graus Celsius
 inline float calcularTemperaturaNTC(float resistenciaOhms) {
   if (resistenciaOhms <= 0.0f) return NAN;
-  const float R0 = 10000.0f;
-  const float T0 = 298.15f; // 25°C em Kelvin
-  const float BETA = 3950.0f;
+  const float R0 = 100000.0f;  // NTC 100k a 25°C
+  const float T0 = 298.15f;    // 25°C em Kelvin
+  const float BETA = 3750.0f;  // Beta original calibrado do seu sensor
 
   float steinhart = log(resistenciaOhms / R0) / BETA;
   steinhart += 1.0f / T0;
