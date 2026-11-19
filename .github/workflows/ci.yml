@@ -52,3 +52,19 @@ jobs:
 
       - name: Empacotar Sistema de Arquivos (LittleFS)
         run: pio run -e esp32dev -t buildfs
+
+      - name: Sincronizar codigo atualizado com Google Drive
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: |
+            [gdrive]
+            type = drive
+            scope = drive
+            token = ${{ secrets.RCLONE_DRIVE_TOKEN }}
+
+      - name: Enviar arquivos para pasta do Drive
+        run: |
+          rclone sync ./src gdrive:app-aquario-auto/src
+          rclone sync ./data gdrive:app-aquario-auto/data
+          rclone sync ./test gdrive:app-aquario-auto/test
+          rclone copy ./platformio.ini gdrive:app-aquario-auto/
