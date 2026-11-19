@@ -1,4 +1,5 @@
 #include "TPAController.h"
+#include "logic/AquarioLogic.h"
 
 TPAController::TPAController(SystemConfig &cfg, SensorModel &sens)
   : config(cfg), sensores(sens), estado(IDLE), tempoInicioEtapa(0), ultimoCheckMinuto(0) {}
@@ -30,7 +31,9 @@ void TPAController::init() {
   uint32_t agoraEpoch = sensores.getEpochAtual();
 
   if (config.proxima_tpa_epoch == 0) {
-    config.proxima_tpa_epoch = calcularProximaTPAConfiguracao(config.tpa_hora1, config.tpa_hora2, config.tpa_periodicidade, sensores);
+    config.proxima_tpa_epoch = calcularProximaTPAConfiguracao(
+      config.tpa_hora1, config.tpa_hora2, config.tpa_periodicidade, sensores
+    );
     StorageModel::saveConfig(config);
   } else if (agoraEpoch >= config.proxima_tpa_epoch) {
     logPrintln("[TPA-SEGURANCA] TPA pendente detectada no boot!");
@@ -61,13 +64,13 @@ void TPAController::atualizarLedsReservatorio() {
 }
 
 void TPAController::dispararTPA() {
-  if (estado != IDLE) return;
-
   uint16_t distRes = sensores.getDistanciaReservatorio();
-  if (distRes >= config.res_dist_min_mm) {
-    logPrintln("[TPA-BLOQUEIO] Reservatorio vazio! TPA abortada por seguranca.");
-    StorageModel::logError(sensores.getDataHoraAtual().c_str(), "TPA abortada: Reservatorio vazio");
-    recalcularProximaTPAAposCiclo();
+  if (!AquarioLogic::podeIniciarTPA(estado != IDLE, distRes, config.res_dist_min_mm)) {
+    if (estado == IDLE) {
+      logPrintln("[TPA-BLOQUEIO] Reservatorio vazio! TPA abortada por seguranca.");
+      StorageModel::logError(sensores.getDataHoraAtual().c_str(), "TPA abortada: Reservatorio vazio");
+      recalcularProximaTPAAposCiclo();
+    }
     return;
   }
 
@@ -91,54 +94,24 @@ void TPAController::desligarBombaEnchimentoManual() { digitalWrite(PIN_RELE_ENCH
 
 uint32_t TPAController::calcularProximaTPAConfiguracao(const char* hora1Str, const char* hora2Str, int periodicidade, SensorModel &sens) {
   RtcDateTime agora = sens.getDateTimeAtual();
-  int h1 = 9, m1 = 0;
+  int h1 = 9, m1 = 0, h2 = 21, m2 = 0;
   sscanf(hora1Str, "%d:%d", &h1, &m1);
+  sscanf(hora2Str, "%d:%d", &h2, &m2);
 
-  uint32_t minutosAgora = agora.Hour() * 60 + agora.Minute();
-  uint32_t minutosH1 = h1 * 60 + m1;
-
-  RtcDateTime alvo;
-  if (minutosH1 >= minutosAgora) {
-    alvo = RtcDateTime(agora.Year(), agora.Month(), agora.Day(), h1, m1, 0);
-  } else {
-    if (periodicidade == 2) {
-      int h2 = 21, m2 = 0;
-      sscanf(hora2Str, "%d:%d", &h2, &m2);
-      uint32_t minutosH2 = h2 * 60 + m2;
-      if (minutosH2 >= minutosAgora) {
-        alvo = RtcDateTime(agora.Year(), agora.Month(), agora.Day(), h2, m2, 0);
-        return alvo.TotalSeconds();
-      }
-    }
-    RtcDateTime amanha(agora.TotalSeconds() + 86400UL);
-    alvo = RtcDateTime(amanha.Year(), amanha.Month(), amanha.Day(), h1, m1, 0);
-  }
-  return alvo.TotalSeconds();
+  return AquarioLogic::calcularProximoEpochTPA(
+    agora.TotalSeconds(), agora.Hour(), agora.Minute(), h1, m1, h2, m2, periodicidade, false
+  );
 }
 
 void TPAController::recalcularProximaTPAAposCiclo() {
   RtcDateTime agora = sensores.getDateTimeAtual();
-  uint32_t minutosAgora = agora.Hour() * 60 + agora.Minute();
-
   int h1 = 9, m1 = 0, h2 = 21, m2 = 0;
   sscanf(config.tpa_hora1, "%d:%d", &h1, &m1);
   sscanf(config.tpa_hora2, "%d:%d", &h2, &m2);
 
-  RtcDateTime alvo;
-  if (config.tpa_periodicidade == 2) {
-    uint32_t minutosH2 = h2 * 60 + m2;
-    if (minutosH2 >= minutosAgora) {
-      alvo = RtcDateTime(agora.Year(), agora.Month(), agora.Day(), h2, m2, 0);
-    } else {
-      RtcDateTime amanha(agora.TotalSeconds() + 86400UL);
-      alvo = RtcDateTime(amanha.Year(), amanha.Month(), amanha.Day(), h1, m1, 0);
-    }
-  } else {
-    RtcDateTime amanha(agora.TotalSeconds() + 86400UL);
-    alvo = RtcDateTime(amanha.Year(), amanha.Month(), amanha.Day(), h1, m1, 0);
-  }
-
-  config.proxima_tpa_epoch = alvo.TotalSeconds();
+  config.proxima_tpa_epoch = AquarioLogic::calcularProximoEpochTPA(
+    agora.TotalSeconds(), agora.Hour(), agora.Minute(), h1, m1, h2, m2, config.tpa_periodicidade, true
+  );
   StorageModel::saveConfig(config);
 }
 
@@ -187,16 +160,17 @@ void TPAController::update() {
     uint32_t segDecorridos = (agoraMs >= tempoInicioEtapa) ? ((agoraMs - tempoInicioEtapa) / 1000) : 0;
     uint16_t distAq = sensores.getDistanciaAquario();
 
-    bool leituraValida = (distAq > 0 && distAq < 2000);
-    bool atingeNivel = (leituraValida && distAq >= config.aq_dist_min_mm);
-    bool atingeTempo = (config.tempo_max_drenagem_seg > 0 && segDecorridos >= config.tempo_max_drenagem_seg);
+    AquarioLogic::MotivoFimEtapaTPA resDreno = AquarioLogic::avaliarEtapaDrenagem(
+      distAq, config.aq_dist_min_mm, segDecorridos, config.tempo_max_drenagem_seg
+    );
 
-    if (atingeNivel || atingeTempo) {
+    if (resDreno != AquarioLogic::TPA_CONTINUAR) {
       digitalWrite(PIN_RELE_DRENAGEM, HIGH);
       duracaoDrenagemReal = segDecorridos;
       nivelDrenagemRealMm = distAq;
-      motivoDrenagemReal = atingeNivel ? "NIVEL_MINIMO" : "TIMEOUT_SEGURANCA";
-      logPrintf("[TPA] Drenagem finalizada por %s (%u s) - Nivel: %u mm\n", motivoDrenagemReal.c_str(), segDecorridos, distAq);
+      motivoDrenagemReal = (resDreno == AquarioLogic::TPA_FIM_NIVEL_ATINGIDO) ? "NIVEL_MINIMO" : "TIMEOUT_SEGURANCA";
+      logPrintf("[TPA] Drenagem finalizada por %s (%lu s) - Nivel: %u mm\n",
+                motivoDrenagemReal.c_str(), segDecorridos, distAq);
 
       logPrintf("[TPA] Aguardando %u s para escoamento final do sifao...\n", config.tempo_pausa_pos_dreno_seg);
       tempoInicioEtapa = millis();
@@ -222,24 +196,24 @@ void TPAController::update() {
     uint16_t distAq = sensores.getDistanciaAquario();
     uint16_t distRes = sensores.getDistanciaReservatorio();
 
-    bool leituraAqValida = (distAq > 0 && distAq < 2000);
-    bool leituraResValida = (distRes > 0 && distRes < 2000);
+    AquarioLogic::MotivoFimEtapaTPA resEnche = AquarioLogic::avaliarEtapaEnchimento(
+      distAq, config.aq_dist_max_mm, distRes, config.res_dist_min_mm,
+      tempoTotalEnchimento + segDecorridos, config.tempo_max_enchimento_seg
+    );
 
-    bool atingeNivel = (leituraAqValida && distAq <= config.aq_dist_max_mm);
-    bool atingeTempo = (config.tempo_max_enchimento_seg > 0 && (tempoTotalEnchimento + segDecorridos) >= config.tempo_max_enchimento_seg);
-    bool resEsvaziou = (leituraResValida && distRes >= config.res_dist_min_mm);
-
-    if (atingeNivel || atingeTempo || resEsvaziou) {
+    if (resEnche != AquarioLogic::TPA_CONTINUAR) {
       digitalWrite(PIN_RELE_ENCHIMENTO, HIGH);
       tempoTotalEnchimento += segDecorridos;
 
-      if (atingeNivel && !atingeTempo && !resEsvaziou) {
-        logPrintf("[TPA] Nivel alvo atingido (%u mm). Estabilizando por %u s...\n", distAq, config.tempo_estabilizacao_seg);
+      if (resEnche == AquarioLogic::TPA_FIM_NIVEL_ATINGIDO) {
+        logPrintf("[TPA] Nivel alvo atingido (%u mm). Estabilizando por %u s...\n",
+                  distAq, config.tempo_estabilizacao_seg);
         tempoInicioEtapa = millis();
         estado = ESTABILIZANDO;
       } else {
-        const char* motivo = resEsvaziou ? "RESERVATORIO_VAZIO" : "TIMEOUT_SEGURANCA";
-        logPrintf("[TPA] Enchimento finalizado por %s (%u s totais) - Nivel: %u mm\n", motivo, tempoTotalEnchimento, distAq);
+        const char* motivo = (resEnche == AquarioLogic::TPA_FIM_RESERVATORIO_VAZIO) ? "RESERVATORIO_VAZIO" : "TIMEOUT_SEGURANCA";
+        logPrintf("[TPA] Enchimento finalizado por %s (%lu s totais) - Nivel: %u mm\n",
+                  motivo, tempoTotalEnchimento, distAq);
         finalizarCicloTPA(tempoTotalEnchimento, distAq, motivo);
       }
     }
@@ -252,14 +226,15 @@ void TPAController::update() {
     if (segEstab >= config.tempo_estabilizacao_seg) {
       uint16_t distAqEstabilizada = sensores.getDistanciaAquario();
 
-      if (distAqEstabilizada > (config.aq_dist_max_mm + config.tolerancia_estabilizacao_mm) && distAqEstabilizada < 2000) {
+      if (AquarioLogic::precisaPulsoComplementarTPA(distAqEstabilizada, config.aq_dist_max_mm, config.tolerancia_estabilizacao_mm)) {
         logPrintf("[TPA] Nivel estabilizou em %u mm (alvo %u + tol %u mm). Acionando pulso complementar...\n",
                   distAqEstabilizada, config.aq_dist_max_mm, config.tolerancia_estabilizacao_mm);
         tempoInicioEtapa = millis();
         estado = ENCHENDO;
         digitalWrite(PIN_RELE_ENCHIMENTO, LOW);
       } else {
-        logPrintf("[TPA] Enchimento concluido e estabilizado em %u mm (%u s totais)\n", distAqEstabilizada, tempoTotalEnchimento);
+        logPrintf("[TPA] Enchimento concluido e estabilizado em %u mm (%lu s totais)\n",
+                  distAqEstabilizada, tempoTotalEnchimento);
         finalizarCicloTPA(tempoTotalEnchimento, distAqEstabilizada, "NIVEL_MAXIMO_ESTABILIZADO");
       }
     }
@@ -287,22 +262,22 @@ void TPAController::interromperManualmente() {
 
 String TPAController::getNomeEstado() const {
   switch (estado) {
-    case DRENANDO:        return "DRENANDO";
+    case DRENANDO: return "DRENANDO";
     case PAUSA_POS_DRENO: return "AGUARDANDO SIFÃO";
-    case ENCHENDO:        return "ENCHENDO";
-    case ESTABILIZANDO:   return "ESTABILIZANDO NÍVEL";
-    case ALARME_ERRO:     return "ALARME DE ERRO";
-    default:              return "OCIOSO";
+    case ENCHENDO: return "ENCHENDO";
+    case ESTABILIZANDO: return "ESTABILIZANDO NÍVEL";
+    case ALARME_ERRO: return "ALARME DE ERRO";
+    default: return "OCIOSO";
   }
 }
 
 void TPAController::dispararTPAManual() {
-  if (estado != IDLE) return;
-
   uint16_t distRes = sensores.getDistanciaReservatorio();
-  if (distRes >= config.res_dist_min_mm) {
-    logPrintln("[TPA-BLOQUEIO] Reservatorio vazio! TPA manual abortada por seguranca.");
-    StorageModel::logError(sensores.getDataHoraAtual().c_str(), "TPA manual abortada: Reservatorio vazio");
+  if (!AquarioLogic::podeIniciarTPA(estado != IDLE, distRes, config.res_dist_min_mm)) {
+    if (estado == IDLE) {
+      logPrintln("[TPA-BLOQUEIO] Reservatorio vazio! TPA manual abortada por seguranca.");
+      StorageModel::logError(sensores.getDataHoraAtual().c_str(), "TPA manual abortada: Reservatorio vazio");
+    }
     return; // Não recalcula o agendamento futuro
   }
 
