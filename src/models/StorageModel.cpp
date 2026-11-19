@@ -158,7 +158,7 @@ void StorageModel::logTPA(const char* dataHora, uint32_t tempoDreno, uint16_t ni
 
   File f = SD.open(LOG_FILE, FILE_APPEND);
   if (f) {
-    f.printf("%s | Dreno: %us (%umm - %s) | Enche: %us (%umm - %s)\n",
+    f.printf("%s | Dreno: %lus (%umm - %s) | Enche: %lus (%umm - %s)\n",
              dataHora, tempoDreno, nivelDrenoMm, motivoDreno, tempoEnche, nivelEncheMm, motivoEnche);
     f.flush();
     f.close();

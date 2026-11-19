@@ -118,7 +118,7 @@ void setup() {
   esp_reset_reason_t motivo = esp_reset_reason();
   if (motivo != ESP_RST_SW) {
     char msgBoot[160];
-    snprintf(msgBoot, sizeof(msgBoot), "Boot #%lu | Motivo: %s | Heap livre: %u bytes",
+    snprintf(msgBoot, sizeof(msgBoot), "Boot #%lu | Motivo: %s | Heap livre: %lu bytes",
              sysConfig.boot_counter, obterMotivoReset(motivo), ESP.getFreeHeap());
     logPrintln(String("[BOOT-DIAG] ") + msgBoot);
     StorageModel::logError(sensores.getDataHoraAtual().c_str(), msgBoot);
