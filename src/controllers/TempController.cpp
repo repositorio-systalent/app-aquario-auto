@@ -1,4 +1,5 @@
 #include "controllers/TempController.h"
+#include "logic/AquarioLogic.h"
 
 TempController::TempController(SystemConfig &cfg, SensorModel &sens)
   : config(cfg), sensores(sens) {}
@@ -24,19 +25,25 @@ void TempController::desligarTudo() {
 }
 
 void TempController::update(bool tpaEmAndamento) {
-  // Verifica a cada 2 segundos para evitar ruído de leitura instantânea
   if (millis() - ultimoCheckMs < 2000) return;
   ultimoCheckMs = millis();
 
-  if (!config.temp_controle_ativo || tpaEmAndamento) {
-    desligarTudo();
-    return;
-  }
-
   float temp = sensores.getTemperatura();
 
-  // Proteção contra sensor desconectado, em curto ou sob sol direto (> 45°C)
-  if (isnan(temp) || temp < 5.0f || temp > 45.0f) {
+  AquarioLogic::DecisaoTermica decisao = AquarioLogic::avaliarControleTermico(
+    temp,
+    config.temp_controle_ativo,
+    tpaEmAndamento,
+    aquecedorLigado,
+    coolerLigado,
+    config.temp_min_liga,
+    config.temp_min_desliga,
+    config.temp_max_liga,
+    config.temp_max_desliga
+  );
+
+  // Tratamento de alerta caso o sensor NTC saia da faixa válida (5°C a 45°C)
+  if (decisao.erroSensor) {
     desligarTudo();
     if (!erroSensorRegistrado) {
       erroSensorRegistrado = true;
@@ -49,31 +56,17 @@ void TempController::update(bool tpaEmAndamento) {
   }
   erroSensorRegistrado = false;
 
-  // --- LÓGICA DE AQUECIMENTO (GPIO 27) ---
-  if (!aquecedorLigado && temp <= config.temp_min_liga) {
-    coolerLigado = false;
-    digitalWrite(PIN_RELE_RESERVA2, HIGH);
-
-    aquecedorLigado = true;
-    digitalWrite(PIN_RELE_RESERVA1, LOW);
-    logPrintf("[TEMP] Temp %.1f C <= %.1f C -> Aquecedor LIGADO\n", temp, config.temp_min_liga);
-  } else if (aquecedorLigado && temp >= config.temp_min_desliga) {
-    aquecedorLigado = false;
-    digitalWrite(PIN_RELE_RESERVA1, HIGH);
-    logPrintf("[TEMP] Temp %.1f C >= %.1f C -> Aquecedor DESLIGADO\n", temp, config.temp_min_desliga);
+  // Aplica estado do Aquecedor (GPIO 27) somente quando houver mudança
+  if (decisao.ligarAquecedor != aquecedorLigado) {
+    aquecedorLigado = decisao.ligarAquecedor;
+    digitalWrite(PIN_RELE_RESERVA1, aquecedorLigado ? LOW : HIGH);
+    logPrintf("[TEMP] Temp %.1f C -> Aquecedor %s\n", temp, aquecedorLigado ? "LIGADO" : "DESLIGADO");
   }
 
-  // --- LÓGICA DE RESFRIAMENTO / COOLER (GPIO 14) ---
-  if (!coolerLigado && temp >= config.temp_max_liga) {
-    aquecedorLigado = false;
-    digitalWrite(PIN_RELE_RESERVA1, HIGH);
-
-    coolerLigado = true;
-    digitalWrite(PIN_RELE_RESERVA2, LOW);
-    logPrintf("[TEMP] Temp %.1f C >= %.1f C -> Cooler LIGADO\n", temp, config.temp_max_liga);
-  } else if (coolerLigado && temp <= config.temp_max_desliga) {
-    coolerLigado = false;
-    digitalWrite(PIN_RELE_RESERVA2, HIGH);
-    logPrintf("[TEMP] Temp %.1f C <= %.1f C -> Cooler DESLIGADO\n", temp, config.temp_max_desliga);
+  // Aplica estado do Cooler (GPIO 14) somente quando houver mudança
+  if (decisao.ligarCooler != coolerLigado) {
+    coolerLigado = decisao.ligarCooler;
+    digitalWrite(PIN_RELE_RESERVA2, coolerLigado ? LOW : HIGH);
+    logPrintf("[TEMP] Temp %.1f C -> Cooler %s\n", temp, coolerLigado ? "LIGADO" : "DESLIGADO");
   }
 }

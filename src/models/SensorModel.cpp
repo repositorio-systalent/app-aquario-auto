@@ -1,16 +1,19 @@
 #include "SensorModel.h"
+#include "logic/AquarioLogic.h"
 #include <math.h>
 
-const float R_FIXO = 9800.0;
-const float R0_NTC = 100000.0;
+const float R_FIXO = 9800.0;     // Seu resistor fixo medido no multímetro
+const float R0_NTC = 10000.0;    // NTC 10k a 25°C
 const float T0_KELVIN = 298.15;
-const float VCC_MV = 3280.0;
-const float BETA = 3750.0;
+const float R_FIXO = 9800.0;
+const float VCC_MV = 3280.0;     // Tensão real medida no pino 3.3V
+const float BETA = 3950.0;       // Beta 3950
 
 SensorModel::SensorModel() : rtc(Wire) {}
 
 bool SensorModel::initSensors() {
   Wire.begin(21, 22);
+  Wire.setTimeOut(50);
 
   pinMode(PIN_XSHUT_AQUARIO, OUTPUT);
   pinMode(PIN_XSHUT_RESERV, OUTPUT);
@@ -70,12 +73,7 @@ float SensorModel::getTemperatura() {
   if (vOut_mv < 50.0 || vOut_mv > (VCC_MV - 50.0)) return -99.0;
 
   float rNtc = R_FIXO * (vOut_mv / (VCC_MV - vOut_mv));
-  float steinhart = rNtc / R0_NTC;
-  steinhart = log(steinhart);
-  steinhart /= BETA;
-  steinhart += 1.0 / T0_KELVIN;
-  steinhart = 1.0 / steinhart;
-  return steinhart - 273.15;
+  return AquarioLogic::calcularTemperaturaNTC(rNtc);
 }
 
 static uint8_t falhasConsecutivasI2C = 0;
