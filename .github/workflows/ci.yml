@@ -56,6 +56,7 @@ jobs:
       - name: Sincronizar codigo atualizado com Google Drive
         uses: AnimMouse/setup-rclone@v1
         with:
+          disable_base64: true
           rclone_config: |
             [gdrive]
             type = drive
